@@ -1,9 +1,9 @@
 # Checkpoints
 
 ## Current Checkpoint
-- Name: First Polymarket ingestion slice complete
-- Date: 2026-03-18
-- Status: first data-ingestion task is implemented, refactored to a raw-ingestion dispatcher boundary, and ready for user review
+- Name: Provider-neutral raw archive boundary complete
+- Date: 2026-03-19
+- Status: raw payload persistence now runs through a provider-neutral object-store boundary with local and MinIO-backed adapters plus durable local ingestion-state logs, and is ready for user review
 
 ## Completed
 - Read execution contract
@@ -16,11 +16,15 @@
 - Refactored ingestion around dispatcher, raw-sink, and state-store interfaces
 - Separated Polymarket ELT normalization from raw ingestion connectors
 - Added tests covering dispatcher flow, raw connectors, and normalization
+- Added a provider-neutral raw archive boundary with object-store-backed JSONL persistence
+- Added local filesystem and MinIO-backed object-store adapters
+- Added durable local ingestion success and failure logs
+- Added Docker Compose-based local MinIO bootstrap
 
 ## Next Checkpoint
-- Name: Raw Polymarket payload persistence integrated
+- Name: Raw archive reader and exploratory profiling integrated
 - Exit criteria:
-  - raw Gamma market payloads are persisted before normalization
-  - raw CLOB order book and midpoint payloads are persisted before normalization
-  - persisted payload layout supports later replay and exploratory profiling
-  - the user reviews and approves the first ingestion slice
+  - archived raw Gamma and CLOB batches can be read back from the raw archive layer
+  - exploratory profiling reports payload shapes, nullability, and unknown fields from persisted archives
+  - raw-to-canonical mapping notes are documented from observed payloads
+  - the user reviews and approves the raw archive slice

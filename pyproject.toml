@@ -8,6 +8,7 @@ packages = [{ include = "poly_arbitrage", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.11"
+boto3 = "^1.38.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

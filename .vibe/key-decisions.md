@@ -101,3 +101,17 @@ Keeping ingestion and ELT structurally similar reduces navigation cost and makes
 ### Separate Polymarket transport protocol, errors, and HTTP implementation
 Rationale:
 The source transport layer should follow the same separation of concerns as the rest of the package. Keeping the HTTP protocol, source-specific exceptions, and urllib implementation in distinct modules reduces mixed responsibilities and makes it easier to swap transports later without moving unrelated code.
+
+## 2026-03-19
+
+### Put raw payload bodies behind a provider-neutral object-store boundary
+Rationale:
+Raw payload storage needs to support local development on MinIO today while preserving a clean migration path to AWS S3 and future GCS support. The application boundary should talk in terms of containers, object keys, and storage URIs rather than MinIO- or S3-specific client details.
+
+### Use MinIO as the first local raw-object-store backend
+Rationale:
+MinIO gives the project a concrete local object-store target that is operationally close to AWS S3 without forcing cloud infrastructure into the first implementation slice. It also keeps local replay and archive inspection aligned with the eventual production storage shape.
+
+### Persist ingestion manifests and failures outside process memory
+Rationale:
+Raw object persistence alone is not sufficient for replay or operational debugging if job results disappear when the process exits. Even before the full database layer is in place, local durable state logs provide traceability across runs and make the raw archive materially more useful.

@@ -44,3 +44,12 @@
 - Split the Polymarket HTTP layer so the JSON client protocol, Polymarket-specific error type, and urllib transport implementation are no longer co-located
 - Repointed source connectors to the new HTTP module layout and corrected the query-param import path after the split
 - Verified the HTTP-layer refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `PYTHONPATH=src python3 -m compileall src tests scripts`
+- Reconciled the plan and checkpoint status after confirming that raw payload persistence already existed in the current ingestion slice
+- Introduced a provider-neutral raw archive boundary that separates archive layout and JSONL batch serialization from the backing object-store implementation
+- Added a local filesystem object-store adapter for tests and local development plus an S3-compatible adapter for MinIO-backed raw archive storage
+- Reworked the CLI to target the object-store-backed raw archive and to persist ingestion success and failure logs durably on disk
+- Added a Docker Compose-based MinIO service definition for local object-store bootstrapping
+- Added tests covering object-store-backed raw sink writes, durable local ingestion-state logging, and S3-compatible object-store request behavior
+- Cleaned up a pre-existing unused import in the Polymarket urllib HTTP client while bringing the touched ingestion files to a clean Ruff state
+- Removed the now-unused `LocalJsonlRawSink` compatibility wrapper after confirming all call sites already used `ObjectStoreRawSink` directly
+- Verified the storage-abstraction slice with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion scripts/ingest_polymarket.py tests/unit/ingestion`, and `PYTHONPATH=src python3 -m compileall src tests scripts`

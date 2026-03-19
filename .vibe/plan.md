@@ -14,11 +14,12 @@
 - v0.1.10 | 2026-03-19 | Reorganized ingestion into entity-based packages for models, protocols, workers, queues, sinks, state stores, and source connectors
 - v0.1.11 | 2026-03-19 | Reorganized Polymarket ELT into entity-based packages for models, parsers, normalizers, and builders
 - v0.1.12 | 2026-03-19 | Split Polymarket HTTP concerns into dedicated protocol, error, and urllib transport modules
+- v0.1.13 | 2026-03-19 | Introduced a provider-neutral raw archive boundary with local and MinIO-backed object-store adapters plus durable local ingestion-state logs
 
 ## Current Status
 - Phase: Development session
-- Overall status: first market-ingestion task completed and refactored to a raw-ingestion boundary for user review
-- Blocking items: local `poetry` and `ruff` toolchain setup is still pending
+- Overall status: raw Polymarket archive persistence is implemented behind a provider-neutral object-store boundary and ready for user review
+- Blocking items: `poetry`-managed environment bootstrap is still pending
 
 ## Planning Assumptions
 - v1 is a private single-user research and alerting platform only
@@ -73,18 +74,20 @@ Status: in progress
 
 Tasks:
 - [done] Integrate Polymarket market and price ingestion
-- [todo] Persist raw Polymarket payloads and source snapshots before heavy normalization
+- [done] Persist raw Polymarket payloads and source snapshots before heavy normalization
+- [done] Introduce a provider-neutral raw object-store abstraction with local and MinIO-backed adapters
+- [done] Persist ingestion manifests and failure events durably for local development
 - [todo] Build exploratory profiling on raw payload shapes, nullability, and update frequency
 - [todo] Refine canonical market records and time-series snapshots from the raw dataset
-- [todo] Archive raw payloads for replay and reprocessing
+- [in-progress] Archive raw payloads for replay and reprocessing
 - [todo] Define ingestion idempotency and retry rules
 - [todo] Define freshness SLAs and lag monitoring
 
 ### F3a. Raw data exploration and ELT refinement
-Status: todo
+Status: in progress
 
 Tasks:
-- [todo] Sample and inspect real market metadata, price, and rules payloads
+- [todo] Sample and inspect real market metadata, price, and rules payloads from the persisted raw archive
 - [todo] Document raw-to-canonical mappings and unknown fields
 - [todo] Define bronze/silver-style ELT stages or equivalent raw/refined layers
 - [todo] Identify schema drift risks and payload versioning strategy
@@ -377,6 +380,7 @@ Tasks:
 - local-first for the first delivery
 - cloud-ready service boundaries and storage contracts
 - Docker Compose for local orchestration
+- MinIO as the first local raw-object-store backend behind a provider-neutral storage interface
 - no Kubernetes or managed-service dependency before the local vertical slice works
 
 ## Blueprint Completion Notes
@@ -387,6 +391,7 @@ Tasks:
 - the first implementation slice should favor raw capture and reprocessable storage over premature canonicalization
 - canonical schemas should stabilize only after inspecting real Polymarket payloads and observed update behavior
 - ELT refinement should happen before downstream feature pipelines hard-code assumptions about field shape or data completeness
+- raw object storage should stay provider-neutral at the application boundary so MinIO, AWS S3, and future GCS adapters can be swapped without rewriting ingestion
 
 ### F7. Opportunity engine
 Status: todo

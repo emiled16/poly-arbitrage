@@ -9,7 +9,6 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from poly_arbitrage.ingestion.sources.polymarket.errors import PolymarketAPIError
-from poly_arbitrage.ingestion.sources.polymarket.protocols.json_http_client import JsonHttpClient
 from poly_arbitrage.ingestion.utils.query_params import normalize_query_params
 
 

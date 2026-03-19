@@ -2,29 +2,33 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
+import os
 import sys
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from poly_arbitrage.ingestion.dispatchers.ingestion_dispatcher import IngestionDispatcher
-from poly_arbitrage.ingestion.models.request import IngestionRequest
-from poly_arbitrage.ingestion.queues.in_memory_job_queue import InMemoryJobQueue
-from poly_arbitrage.ingestion.raw_sinks.local_jsonl_raw_sink import LocalJsonlRawSink
-from poly_arbitrage.ingestion.sources.polymarket.connector_registry import (
-    build_polymarket_connector_registry,
-)
-from poly_arbitrage.ingestion.state_stores.in_memory_state_store import InMemoryStateStore
-from poly_arbitrage.ingestion.utils.serialization import serialize_value
-from poly_arbitrage.ingestion.workers.ingestion_worker import IngestionWorker
-
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Dispatch and process one raw Polymarket ingestion job.")
+    from poly_arbitrage.ingestion.dispatchers.ingestion_dispatcher import IngestionDispatcher
+    from poly_arbitrage.ingestion.models.request import IngestionRequest
+    from poly_arbitrage.ingestion.queues.in_memory_job_queue import InMemoryJobQueue
+    from poly_arbitrage.ingestion.raw_sinks.object_store_raw_sink import ObjectStoreRawSink
+    from poly_arbitrage.ingestion.sources.polymarket.connector_registry import (
+        build_polymarket_connector_registry,
+    )
+    from poly_arbitrage.ingestion.state_stores.local_jsonl_state_store import (
+        LocalJsonlStateStore,
+    )
+    from poly_arbitrage.ingestion.utils.serialization import serialize_value
+    from poly_arbitrage.ingestion.workers.ingestion_worker import IngestionWorker
+
+    parser = argparse.ArgumentParser(
+        description="Dispatch and process one raw Polymarket ingestion job."
+    )
     parser.add_argument(
         "--source",
         default="polymarket_gamma",
@@ -41,9 +45,50 @@ def main() -> None:
     parser.add_argument("--offset", type=int, default=0, help="Gamma pagination offset.")
     parser.add_argument("--token-id", help="Token id for CLOB book or midpoint ingestion.")
     parser.add_argument(
-        "--output-dir",
-        default="artifacts/datasets/raw",
-        help="Local raw sink root used as a stand-in for object storage.",
+        "--raw-store-backend",
+        default="local",
+        choices=["local", "minio"],
+        help="Raw object-store backend to use.",
+    )
+    parser.add_argument(
+        "--raw-store-root",
+        default="artifacts/datasets",
+        help="Root directory used by the local object-store backend.",
+    )
+    parser.add_argument(
+        "--raw-store-container",
+        default="raw",
+        help="Container or bucket name used for raw payload archives.",
+    )
+    parser.add_argument(
+        "--state-dir",
+        default="artifacts/state/ingestion",
+        help="Directory where durable local ingestion state logs are appended.",
+    )
+    parser.add_argument(
+        "--minio-endpoint",
+        default=os.getenv("POLY_ARB_MINIO_ENDPOINT", "http://127.0.0.1:9000"),
+        help="MinIO S3-compatible endpoint URL.",
+    )
+    parser.add_argument(
+        "--minio-access-key",
+        default=os.getenv("POLY_ARB_MINIO_ACCESS_KEY"),
+        help="MinIO access key. Falls back to POLY_ARB_MINIO_ACCESS_KEY.",
+    )
+    parser.add_argument(
+        "--minio-secret-key",
+        default=os.getenv("POLY_ARB_MINIO_SECRET_KEY"),
+        help="MinIO secret key. Falls back to POLY_ARB_MINIO_SECRET_KEY.",
+    )
+    parser.add_argument(
+        "--minio-region",
+        default=os.getenv("POLY_ARB_MINIO_REGION", "us-east-1"),
+        help="Region name used by the MinIO S3-compatible client.",
+    )
+    parser.add_argument(
+        "--minio-session-token",
+        default=os.getenv("POLY_ARB_MINIO_SESSION_TOKEN"),
+        help="Optional MinIO session token.",
     )
     args = parser.parse_args()
 
@@ -60,8 +105,11 @@ def main() -> None:
     connectors = build_polymarket_connector_registry()
     queue = InMemoryJobQueue()
     dispatcher = IngestionDispatcher(connectors=connectors, job_queue=queue)
-    state_store = InMemoryStateStore()
-    raw_sink = LocalJsonlRawSink(root_directory=ROOT / args.output_dir)
+    state_store = LocalJsonlStateStore(root_directory=ROOT / args.state_dir)
+    raw_sink = ObjectStoreRawSink(
+        object_store=_build_object_store(args),
+        container_name=args.raw_store_container,
+    )
     worker = IngestionWorker(
         connectors=connectors,
         job_queue=queue,
@@ -88,6 +136,29 @@ def _build_params(args: argparse.Namespace) -> dict[str, object]:
             "offset": args.offset,
         }
     return {"token_id": args.token_id}
+
+
+def _build_object_store(args: argparse.Namespace) -> object:
+    from poly_arbitrage.ingestion.object_stores.local_filesystem_object_store import (
+        LocalFilesystemObjectStore,
+    )
+    from poly_arbitrage.ingestion.object_stores.s3_compatible_object_store import (
+        S3CompatibleObjectStore,
+    )
+
+    if args.raw_store_backend == "local":
+        return LocalFilesystemObjectStore(root_directory=ROOT / args.raw_store_root)
+
+    if not args.minio_access_key or not args.minio_secret_key:
+        raise ValueError("MinIO backend requires both access key and secret key")
+
+    return S3CompatibleObjectStore(
+        endpoint_url=args.minio_endpoint,
+        access_key_id=args.minio_access_key,
+        secret_access_key=args.minio_secret_key,
+        region_name=args.minio_region,
+        session_token=args.minio_session_token,
+    )
 
 
 if __name__ == "__main__":

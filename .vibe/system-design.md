@@ -87,6 +87,7 @@
 - local-first implementation
 - cloud-ready service boundaries and storage contracts
 - Docker Compose for local orchestration
+- MinIO for the first local raw-object-store deployment
 - staging and managed infrastructure after the local vertical slice proves the shape
 
 ## Data Handling Strategy
@@ -94,6 +95,7 @@
 - separate raw archive storage from refined canonical tables
 - treat canonical schema as downstream of observed payload profiling
 - preserve enough raw context to support replay, reprocessing, and schema evolution
+- keep raw storage behind a provider-neutral object-store interface so local MinIO, AWS S3, and later GCS backends can share the same ingestion boundary
 
 ## Recommended External Source Shortlist
 
