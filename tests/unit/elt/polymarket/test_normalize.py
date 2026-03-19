@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import pytest
+
 from poly_arbitrage.elt.polymarket.builders.market_snapshot_builder import (
     build_market_snapshot,
 )
@@ -126,3 +128,32 @@ def test_build_market_snapshot_from_normalized_clob_payloads() -> None:
     assert snapshot.no_price == Decimal("0.48")
     assert snapshot.market_prob_baseline == Decimal("0.52")
     assert snapshot.spread == Decimal("0.04")
+
+
+def test_normalize_clob_payload_raises_for_missing_timestamp() -> None:
+    with pytest.raises(ValueError, match="valid timestamp"):
+        normalize_clob_payloads(
+            book_payload={
+                "market": "condition-1",
+                "asset_id": "yes-token",
+                "bids": [{"price": "0.50", "size": "100"}],
+                "asks": [{"price": "0.54", "size": "110"}],
+            },
+            midpoint_payload={"mid_price": "0.52"},
+            token_id="yes-token",
+        )
+
+
+def test_normalize_clob_payload_raises_for_invalid_timestamp() -> None:
+    with pytest.raises(ValueError, match="valid timestamp"):
+        normalize_clob_payloads(
+            book_payload={
+                "market": "condition-1",
+                "asset_id": "yes-token",
+                "timestamp": "not-a-timestamp",
+                "bids": [{"price": "0.50", "size": "100"}],
+                "asks": [{"price": "0.54", "size": "110"}],
+            },
+            midpoint_payload={"mid_price": "0.52"},
+            token_id="yes-token",
+        )

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from typing import Any
 
 from poly_arbitrage.elt.polymarket.models.token_order_book_snapshot import (
@@ -38,6 +37,9 @@ def normalize_clob_payloads(
 ) -> TokenOrderBookSnapshot:
     bids = book_payload.get("bids")
     asks = book_payload.get("asks")
+    observed_at = parse_datetime(book_payload.get("timestamp"))
+    if observed_at is None:
+        raise ValueError("CLOB book payload must include a valid timestamp")
     midpoint = parse_decimal(
         midpoint_payload.get("mid")
         or midpoint_payload.get("mid_price")
@@ -47,7 +49,7 @@ def normalize_clob_payloads(
     return TokenOrderBookSnapshot(
         token_id=str(book_payload.get("asset_id") or token_id or ""),
         market_condition_id=string_or_none(book_payload.get("market")),
-        observed_at=parse_datetime(book_payload.get("timestamp")) or datetime.fromtimestamp(0, tz=UTC),
+        observed_at=observed_at,
         best_bid=best_price(bids),
         best_ask=best_price(asks),
         midpoint=midpoint,

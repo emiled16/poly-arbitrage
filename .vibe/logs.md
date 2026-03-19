@@ -54,4 +54,5 @@
 - Removed the now-unused `LocalJsonlRawSink` compatibility wrapper after confirming all call sites already used `ObjectStoreRawSink` directly
 - Removed the thin dispatcher layer, switched job submission to direct request-to-job enqueueing, and made the worker the single connector-resolution boundary
 - Added a regression test proving that an enqueued job with no registered worker connector produces a durable failure record instead of being dropped silently
+- Removed the fake Unix-epoch fallback from CLOB snapshot normalization so missing or invalid book timestamps now fail closed instead of fabricating replay-corrupt data
 - Verified the storage-abstraction slice with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion scripts/ingest_polymarket.py tests/unit/ingestion`, and `PYTHONPATH=src python3 -m compileall src tests scripts`
