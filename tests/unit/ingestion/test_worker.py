@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from poly_arbitrage.ingestion.dispatchers.ingestion_dispatcher import IngestionDispatcher
+import pytest
+
+from poly_arbitrage.ingestion.factories.job_factory import create_job
 from poly_arbitrage.ingestion.factories.raw_record_factory import build_raw_record
 from poly_arbitrage.ingestion.models.batch import IngestionBatch
 from poly_arbitrage.ingestion.models.job import IngestionJob
@@ -34,12 +36,11 @@ class FakeConnector:
         )
 
 
-def test_dispatcher_and_worker_process_one_raw_ingestion_job() -> None:
+def test_worker_processes_one_raw_ingestion_job() -> None:
     queue = InMemoryJobQueue()
     sink = InMemoryRawSink()
     state_store = InMemoryStateStore()
     connectors = {("polymarket_gamma", "markets"): FakeConnector()}
-    dispatcher = IngestionDispatcher(connectors=connectors, job_queue=queue)
     worker = IngestionWorker(
         connectors=connectors,
         job_queue=queue,
@@ -47,13 +48,14 @@ def test_dispatcher_and_worker_process_one_raw_ingestion_job() -> None:
         state_store=state_store,
     )
 
-    job = dispatcher.dispatch(
+    job = create_job(
         IngestionRequest(
             source="polymarket_gamma",
             dataset="markets",
             params={"limit": 1, "offset": 0},
         )
     )
+    queue.enqueue(job)
     processed = worker.process_next()
 
     assert processed is not None
@@ -63,4 +65,35 @@ def test_dispatcher_and_worker_process_one_raw_ingestion_job() -> None:
     assert processed.manifest.object_uri.startswith("memory://")
     assert len(state_store.successes) == 1
     assert not state_store.failures
+    assert not queue.jobs
+
+
+def test_worker_records_failure_for_job_with_unregistered_connector() -> None:
+    queue = InMemoryJobQueue()
+    sink = InMemoryRawSink()
+    state_store = InMemoryStateStore()
+
+    job = create_job(
+        IngestionRequest(
+            source="polymarket_gamma",
+            dataset="markets",
+            params={"limit": 1, "offset": 0},
+        )
+    )
+    queue.enqueue(job)
+
+    worker = IngestionWorker(
+        connectors={},
+        job_queue=queue,
+        raw_sink=sink,
+        state_store=state_store,
+    )
+
+    with pytest.raises(KeyError, match="no connector registered"):
+        worker.process_next()
+
+    assert not state_store.successes
+    assert len(state_store.failures) == 1
+    assert state_store.failures[0].source == "polymarket_gamma"
+    assert state_store.failures[0].dataset == "markets"
     assert not queue.jobs

@@ -115,3 +115,10 @@ MinIO gives the project a concrete local object-store target that is operational
 ### Persist ingestion manifests and failures outside process memory
 Rationale:
 Raw object persistence alone is not sufficient for replay or operational debugging if job results disappear when the process exits. Even before the full database layer is in place, local durable state logs provide traceability across runs and make the raw archive materially more useful.
+
+### De-emphasize the dispatcher layer and let the worker own connector resolution
+Rationale:
+The current dispatcher had become a thin validation-and-enqueue wrapper that duplicated connector knowledge already required by the worker. Removing that validation stage keeps queue admission simpler, makes execution-time failures flow through one consistent boundary, and better respects single responsibility.
+
+Caveat:
+A separate admission or routing layer may still be justified later if ingestion requests need fan-out, deduplication, prioritization, recurring scheduling, or rate-limit-aware routing. If that happens, it should be reintroduced for those explicit responsibilities rather than as a thin queue wrapper.

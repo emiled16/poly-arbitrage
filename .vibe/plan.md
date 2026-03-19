@@ -15,10 +15,11 @@
 - v0.1.11 | 2026-03-19 | Reorganized Polymarket ELT into entity-based packages for models, parsers, normalizers, and builders
 - v0.1.12 | 2026-03-19 | Split Polymarket HTTP concerns into dedicated protocol, error, and urllib transport modules
 - v0.1.13 | 2026-03-19 | Introduced a provider-neutral raw archive boundary with local and MinIO-backed object-store adapters plus durable local ingestion-state logs
+- v0.1.14 | 2026-03-19 | Removed the thin dispatcher layer so request-to-job enqueueing is direct and worker execution owns connector resolution
 
 ## Current Status
 - Phase: Development session
-- Overall status: raw Polymarket archive persistence is implemented behind a provider-neutral object-store boundary and ready for user review
+- Overall status: raw Polymarket archive persistence is implemented behind a provider-neutral object-store boundary, and ingestion now uses a simpler direct enqueue path with worker-owned connector resolution
 - Blocking items: `poetry`-managed environment bootstrap is still pending
 
 ## Planning Assumptions
@@ -77,6 +78,7 @@ Tasks:
 - [done] Persist raw Polymarket payloads and source snapshots before heavy normalization
 - [done] Introduce a provider-neutral raw object-store abstraction with local and MinIO-backed adapters
 - [done] Persist ingestion manifests and failure events durably for local development
+- [done] Simplify ingestion submission by removing the thin dispatcher validation layer
 - [todo] Build exploratory profiling on raw payload shapes, nullability, and update frequency
 - [todo] Refine canonical market records and time-series snapshots from the raw dataset
 - [in-progress] Archive raw payloads for replay and reprocessing

@@ -13,7 +13,7 @@ if str(SRC) not in sys.path:
 
 
 def main() -> None:
-    from poly_arbitrage.ingestion.dispatchers.ingestion_dispatcher import IngestionDispatcher
+    from poly_arbitrage.ingestion.factories.job_factory import create_job
     from poly_arbitrage.ingestion.models.request import IngestionRequest
     from poly_arbitrage.ingestion.queues.in_memory_job_queue import InMemoryJobQueue
     from poly_arbitrage.ingestion.raw_sinks.object_store_raw_sink import ObjectStoreRawSink
@@ -104,7 +104,6 @@ def main() -> None:
     params = _build_params(args)
     connectors = build_polymarket_connector_registry()
     queue = InMemoryJobQueue()
-    dispatcher = IngestionDispatcher(connectors=connectors, job_queue=queue)
     state_store = LocalJsonlStateStore(root_directory=ROOT / args.state_dir)
     raw_sink = ObjectStoreRawSink(
         object_store=_build_object_store(args),
@@ -116,13 +115,14 @@ def main() -> None:
         raw_sink=raw_sink,
         state_store=state_store,
     )
-    job = dispatcher.dispatch(
+    job = create_job(
         IngestionRequest(
             source=args.source,
             dataset=args.dataset,
             params=params,
-        )
+        ),
     )
+    queue.enqueue(job)
     processed = worker.process_next()
     print(json.dumps(serialize_value({"job": job, "processed": processed}), indent=2))
 

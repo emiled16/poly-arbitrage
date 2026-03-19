@@ -52,4 +52,6 @@
 - Added tests covering object-store-backed raw sink writes, durable local ingestion-state logging, and S3-compatible object-store request behavior
 - Cleaned up a pre-existing unused import in the Polymarket urllib HTTP client while bringing the touched ingestion files to a clean Ruff state
 - Removed the now-unused `LocalJsonlRawSink` compatibility wrapper after confirming all call sites already used `ObjectStoreRawSink` directly
+- Removed the thin dispatcher layer, switched job submission to direct request-to-job enqueueing, and made the worker the single connector-resolution boundary
+- Added a regression test proving that an enqueued job with no registered worker connector produces a durable failure record instead of being dropped silently
 - Verified the storage-abstraction slice with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion scripts/ingest_polymarket.py tests/unit/ingestion`, and `PYTHONPATH=src python3 -m compileall src tests scripts`

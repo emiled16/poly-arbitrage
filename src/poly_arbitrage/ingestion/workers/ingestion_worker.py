@@ -21,9 +21,8 @@ class IngestionWorker:
         if job is None:
             return None
 
-        connector = self._get_connector(job.source, job.dataset)
-
         try:
+            connector = self._get_connector(job.source, job.dataset)
             batch = connector.fetch(job)
             object_uri = self.raw_sink.write_batch(batch)
             manifest = IngestionBatchManifest(

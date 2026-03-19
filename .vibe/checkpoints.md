@@ -3,7 +3,7 @@
 ## Current Checkpoint
 - Name: Provider-neutral raw archive boundary complete
 - Date: 2026-03-19
-- Status: raw payload persistence now runs through a provider-neutral object-store boundary with local and MinIO-backed adapters plus durable local ingestion-state logs, and is ready for user review
+- Status: raw payload persistence now runs through a provider-neutral object-store boundary with local and MinIO-backed adapters, durable local ingestion-state logs, and a simplified direct enqueue path that leaves connector resolution to the worker
 
 ## Completed
 - Read execution contract
@@ -20,6 +20,7 @@
 - Added local filesystem and MinIO-backed object-store adapters
 - Added durable local ingestion success and failure logs
 - Added Docker Compose-based local MinIO bootstrap
+- Removed the thin dispatcher layer and made the worker the single connector-resolution boundary
 
 ## Next Checkpoint
 - Name: Raw archive reader and exploratory profiling integrated

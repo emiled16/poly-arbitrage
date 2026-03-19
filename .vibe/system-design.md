@@ -133,16 +133,17 @@
 - opportunity_record
 
 ## Draft Data Flow
-1. ingest market metadata and price updates from Polymarket
-2. persist raw payloads and raw source snapshots
-3. profile raw data and refine raw-to-canonical mappings
-4. persist canonical market state and historical snapshots
-5. trigger fast-path or deep-refresh workflows based on event type
-6. retrieve and archive source artifacts
-7. extract evidence and claims linked to the market
-8. run hypothesis, forecasting, calibration, and ranking stages
-9. generate report payloads and serve updated UI/API views
-10. store all outputs with version references for replay
+1. create and enqueue ingestion jobs from source requests without a separate dispatcher validation stage
+2. ingest market metadata and price updates from Polymarket
+3. persist raw payloads and raw source snapshots
+4. profile raw data and refine raw-to-canonical mappings
+5. persist canonical market state and historical snapshots
+6. trigger fast-path or deep-refresh workflows based on event type
+7. retrieve and archive source artifacts
+8. extract evidence and claims linked to the market
+9. run hypothesis, forecasting, calibration, and ranking stages
+10. generate report payloads and serve updated UI/API views
+11. store all outputs with version references for replay
 
 ## Event Flow
 1. `market.discovered` creates or updates the canonical market record
