@@ -1,0 +1,32 @@
+[tool.poetry]
+name = "poly-arbitrage"
+version = "0.1.0"
+description = "Research tooling for ingesting and analyzing Polymarket political markets."
+authors = ["emdim"]
+readme = "README.md"
+packages = [{ include = "poly_arbitrage", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+pytest-cov = "^6.1.1"
+pytest-mock = "^3.14.0"
+pytest-asyncio = "^0.26.0"
+ruff = "^0.11.2"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,9 +1,9 @@
 # Checkpoints
 
 ## Current Checkpoint
-- Name: Planning baseline created
+- Name: First Polymarket ingestion slice complete
 - Date: 2026-03-18
-- Status: blueprint draft complete and ready for user review
+- Status: first data-ingestion task is implemented, refactored to a raw-ingestion dispatcher boundary, and ready for user review
 
 ## Completed
 - Read execution contract
@@ -11,12 +11,16 @@
 - Created initial `.vibe` planning workspace
 - Drafted first-pass plan and system-design outline
 - Completed the implementation-planning blueprint
+- Created the initial repository scaffold required for development
+- Implemented Polymarket Gamma market discovery and CLOB price snapshot integration
+- Refactored ingestion around dispatcher, raw-sink, and state-store interfaces
+- Separated Polymarket ELT normalization from raw ingestion connectors
+- Added tests covering dispatcher flow, raw connectors, and normalization
 
 ## Next Checkpoint
-- Name: Planning blueprint reviewed
+- Name: Raw Polymarket payload persistence integrated
 - Exit criteria:
-  - ambiguity rubric accepted or amended
-  - source reliability framework accepted or amended
-  - model baseline stack accepted or amended
-  - raw-ingestion-first execution order is accepted or amended
-  - repository scaffolding is authorized
+  - raw Gamma market payloads are persisted before normalization
+  - raw CLOB order book and midpoint payloads are persisted before normalization
+  - persisted payload layout supports later replay and exploratory profiling
+  - the user reviews and approves the first ingestion slice

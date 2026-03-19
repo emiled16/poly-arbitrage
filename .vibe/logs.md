@@ -17,3 +17,30 @@
 - Defined the first model baseline stack: constant-rate benchmark, logistic regression, boosted trees, and calibration
 - Completed the planning blueprint with ambiguity scoring, source reliability, agent contracts, API contracts, observability, and deployment direction
 - Reordered the early implementation plan around raw ingestion, dataset exploration, and schema/ELT refinement
+- Started the first development-session task focused on Polymarket market and price ingestion
+- Created the initial Python project scaffold with `pyproject.toml`, `src/`, `tests/`, `scripts/`, `.python-version`, and `.envrc`
+- Verified current official Polymarket endpoints against the public docs before implementing clients
+- Implemented a Gamma market client with normalization for outcomes, token IDs, event metadata, and liquidity/volume fields
+- Implemented a CLOB pricing client for order book and midpoint snapshots and composed market-level YES/NO snapshots
+- Added a lightweight CLI entrypoint to inspect normalized Polymarket market bundles locally
+- Added unit tests for Gamma normalization, CLOB parsing, and market snapshot composition
+- Verified the task with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit/ingestion -q` and `PYTHONPATH=src python3 -m compileall src tests scripts`
+- Refactored the ingestion tests from `unittest.TestCase` style to plain `pytest` functions and assertions
+- Refactored ingestion to use dispatcher, worker, queue, raw-sink, and state-store contracts instead of a typed normalization service in the ingestion path
+- Replaced the Polymarket market and CLOB clients with raw connectors that emit append-only raw records and batch metadata
+- Moved Polymarket normalization logic into a separate ELT module so source parsing is no longer part of the ingestion write boundary
+- Added a local raw sink implementation as a development stand-in for object storage while preserving production-ready interfaces
+- Reworked the CLI around dispatching and processing raw ingestion jobs instead of printing normalized market bundles
+- Expanded the test suite to cover dispatcher/worker flow, raw connector behavior, and the ELT normalization boundary
+- Verified the refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `PYTHONPATH=src python3 -m compileall src tests scripts`
+- Reorganized the ingestion package into entity-based subpackages so models, factories, protocols, workers, queues, sinks, state stores, and source connectors are separated cleanly
+- Split helper functions out of class files to make class definitions easier to scan and source-specific utilities easier to locate
+- Repointed the CLI, tests, and ELT imports to the new ingestion package layout
+- Verified the organization refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `PYTHONPATH=src python3 -m compileall src tests scripts`
+- Reorganized the Polymarket ELT package into entity-based subpackages so models, parsers, normalizers, and builders are separated cleanly
+- Split ELT parsing helpers from source-specific normalization and snapshot-building logic to keep each module narrower and easier to navigate
+- Repointed ELT tests to the new package layout and removed the old flat ELT modules
+- Verified the ELT organization refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `PYTHONPATH=src python3 -m compileall src tests scripts`
+- Split the Polymarket HTTP layer so the JSON client protocol, Polymarket-specific error type, and urllib transport implementation are no longer co-located
+- Repointed source connectors to the new HTTP module layout and corrected the query-param import path after the split
+- Verified the HTTP-layer refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `PYTHONPATH=src python3 -m compileall src tests scripts`

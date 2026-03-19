@@ -9,11 +9,16 @@
 - v0.1.5 | 2026-03-18 | Defined the first model baseline stack and stable feature subset
 - v0.1.6 | 2026-03-18 | Completed the implementation blueprint with ambiguity, reliability, agent, API, and infra planning
 - v0.1.7 | 2026-03-18 | Reordered early execution around raw ingestion, dataset exploration, and schema/ELT refinement
+- v0.1.8 | 2026-03-18 | Completed the first Polymarket ingestion implementation slice with Gamma and CLOB clients plus tests
+- v0.1.9 | 2026-03-18 | Refactored ingestion around a raw dispatcher boundary and moved Polymarket normalization into a separate ELT module
+- v0.1.10 | 2026-03-19 | Reorganized ingestion into entity-based packages for models, protocols, workers, queues, sinks, state stores, and source connectors
+- v0.1.11 | 2026-03-19 | Reorganized Polymarket ELT into entity-based packages for models, parsers, normalizers, and builders
+- v0.1.12 | 2026-03-19 | Split Polymarket HTTP concerns into dedicated protocol, error, and urllib transport modules
 
 ## Current Status
-- Phase: Implementation planning
-- Overall status: ready for review
-- Blocking items: none for blueprint drafting
+- Phase: Development session
+- Overall status: first market-ingestion task completed and refactored to a raw-ingestion boundary for user review
+- Blocking items: local `poetry` and `ruff` toolchain setup is still pending
 
 ## Planning Assumptions
 - v1 is a private single-user research and alerting platform only
@@ -48,7 +53,7 @@ Status: in progress
 Tasks:
 - [done] Read execution contract and product spec
 - [done] Establish `.vibe` planning workspace
-- [todo] Create initial repository skeleton aligned to `AGENTS.md`
+- [done] Create initial repository skeleton aligned to `AGENTS.md`
 - [todo] Define local development workflow with `poetry`, `pytest`, `ruff`, Docker, and env management
 - [todo] Define release and CI expectations
 
@@ -64,10 +69,10 @@ Tasks:
 - [todo] Refine canonical schema from observed raw source payloads and exploratory profiling
 
 ### F3. Market ingestion and storage
-Status: todo
+Status: in progress
 
 Tasks:
-- [todo] Integrate Polymarket market and price ingestion
+- [done] Integrate Polymarket market and price ingestion
 - [todo] Persist raw Polymarket payloads and source snapshots before heavy normalization
 - [todo] Build exploratory profiling on raw payload shapes, nullability, and update frequency
 - [todo] Refine canonical market records and time-series snapshots from the raw dataset

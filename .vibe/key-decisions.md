@@ -77,3 +77,27 @@ The spec allows Go/Rust for performance-sensitive components, but the planning b
 ### Use market price as an external baseline only
 Rationale:
 The spec explicitly excludes Polymarket price from v1 model inputs and uses it only for comparison and opportunity scoring.
+
+### Use dependency-light stdlib HTTP clients for the first ingestion slice
+Rationale:
+The local repository did not yet have the planned `poetry` environment or third-party packages installed. Using `urllib` for the first Polymarket clients kept the initial ingestion task shippable and testable without blocking on environment bootstrap, while still leaving room to swap in `httpx` later if needed.
+
+### Keep ingestion raw and move normalization into ELT
+Rationale:
+The system design already prioritizes landing raw payloads before canonicalization. Keeping normalization out of ingestion preserves replay fidelity, reduces coupling to source-specific assumptions, and lets Spark own source-stage and canonical transformations cleanly.
+
+### Adopt a dispatcher pattern for source ingestion
+Rationale:
+Multiple sources will need a shared ingestion contract without collapsing their source-specific fetch behavior into one service. A dispatcher plus connector interface keeps queue execution, storage, retries, and source logic decoupled while preserving a uniform operational path.
+
+### Organize ingestion code by entity-oriented packages instead of flat modules
+Rationale:
+The raw-ingestion boundary introduced enough concepts that a flat package became harder to scan. Grouping code by entity and responsibility makes it easier to navigate workers, queues, sinks, state stores, source connectors, and factories without mixing unrelated concerns in the same files.
+
+### Mirror the same entity-oriented organization on the ELT side
+Rationale:
+Keeping ingestion and ELT structurally similar reduces navigation cost and makes the raw-to-refined boundary clearer. Models, parsers, source normalizers, and builders each serve distinct roles and are easier to reason about when they are not collapsed into a couple of large files.
+
+### Separate Polymarket transport protocol, errors, and HTTP implementation
+Rationale:
+The source transport layer should follow the same separation of concerns as the rest of the package. Keeping the HTTP protocol, source-specific exceptions, and urllib implementation in distinct modules reduces mixed responsibilities and makes it easier to swap transports later without moving unrelated code.
