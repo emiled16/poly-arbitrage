@@ -122,3 +122,77 @@ The current dispatcher had become a thin validation-and-enqueue wrapper that dup
 
 Caveat:
 A separate admission or routing layer may still be justified later if ingestion requests need fan-out, deduplication, prioritization, recurring scheduling, or rate-limit-aware routing. If that happens, it should be reintroduced for those explicit responsibilities rather than as a thin queue wrapper.
+
+### Make PostgreSQL the source of truth and RabbitMQ delivery-only for ingestion
+Rationale:
+The earlier in-memory queue shape blurred state and transport. PostgreSQL should own durable job state, schedules, cursors, and completion metadata, while RabbitMQ should only deliver work to consumers. That separation keeps retries, auditing, and operator visibility out of broker-specific message state and makes the queue disposable.
+
+### Collapse the ingestion runtime around a small set of strong modules
+Rationale:
+The previous ingestion package had too many tiny abstractions for a flow that still ran in one local process. Consolidating the runtime around `contracts.py`, `service.py`, `scheduler.py`, `runtime.py`, and a small number of source and adapter modules keeps the system organized without making navigation cumbersome.
+
+### Separate SQLAlchemy schema and record persistence from ingestion state semantics
+Rationale:
+The Postgres state store should not also own table declarations and raw SQL updates. Table definitions belong in a dedicated database layer, and SQLAlchemy-backed record stores should manage persisted rows for jobs, cursors, and schedules. That keeps `state/postgres.py` focused on translating ingestion-domain actions into persisted record changes instead of mixing storage schema with state semantics.
+
+### Remove the extra Postgres state-store layer and let use cases depend on repositories directly
+Rationale:
+The intermediate state-store adapter added another hop without adding meaningful behavior. Job execution, schedule enqueueing, and API handlers are easier to follow when they depend directly on `JobRepository`, `CursorRepository`, and `ScheduleRepository`, while SQLAlchemy-facing record stores remain isolated behind a small CRUD routing registry.
+
+### Keep one thin CRUD routing registry for persisted record classes
+Rationale:
+Simple save and delete flows should not require each repository to hand-wire every record store call. A small registry that routes `IngestionJobRecord`, `IngestionCursorRecord`, and `IngestionScheduleRecord` by class keeps standard CRUD concise, while complex reads still live on explicit repositories where the domain behavior is visible.
+
+### Schedule retries in PostgreSQL instead of relying on delayed broker features
+Rationale:
+Retry eligibility is part of job state, not message transport. Persisting retry timing in the jobs table keeps retry behavior auditable, makes it easy to inspect pending retries through admin queries, and avoids coupling correctness to RabbitMQ-specific delayed-delivery plugins.
+
+### Use idempotency keys at the job-record boundary
+Rationale:
+Duplicate ingestion submissions should be prevented where jobs are persisted, not only in API or CLI callers. A unique database constraint on `(source, dataset, idempotency_key)` plus repository lookup-on-create keeps submission behavior deterministic across entrypoints and protects against accidental duplicate writes.
+
+### Let each source own its checkpoint format and semantics
+Rationale:
+An ingestion cursor is only meaningful if the source handler actually interprets it. Gamma market ingestion now owns a source-specific cursor format based on `updatedAt` and `id`, with `offset` retained only as transient sweep state inside a watermark-driven fetch cycle. That keeps checkpoint logic close to the API behavior it depends on and avoids pretending that a generic cursor string can be source-agnostic.
+
+Caveat:
+A single persisted cursor per `(source, dataset)` should be treated as a serialized checkpoint, not as a coordination primitive for concurrent workers. If the system later runs multiple in-flight jobs that can advance the same checkpoint, it will need explicit protection against lost updates, such as one active cursor-advancing pipeline per source/dataset, compare-and-set cursor writes, or explicit work partitioning by shard/range.
+
+### Treat schedule-level cursors as bootstrap seeds, not persistent overrides
+Rationale:
+A schedule definition should not permanently outrank the latest persisted checkpoint, or forward progress can stall indefinitely. Renaming the schedule field to `bootstrap_cursor` makes its purpose explicit and lets normal recurring runs prefer the repository-backed cursor state after the first successful fetch.
+
+### Use a dedicated polling scheduler service for the composed local stack
+Rationale:
+The current ingestion runtime already persists schedule cadence and retry timing in PostgreSQL, so the missing piece is only a long-running trigger loop. A small scheduler container that calls `enqueue_due_work()` every N seconds keeps scheduling logic inside the application boundary, avoids pulling in Airflow or Dagster before there is multi-step workflow complexity, and is simpler than layering OS cron into a containerized local stack.
+
+Caveat:
+If the system later needs calendar-aware workflows, task fan-out across heterogeneous pipelines, dependency graphs, or operator-managed backfills, an external orchestrator can still be added on top. For the current ingestion runtime, that would be a scale-up in operational scope rather than a correction to the scheduling model.
+
+### Use full snapshot polling for recurring `polymarket_gamma/markets`
+Rationale:
+Recurring Gamma polling should have one obvious production behavior. Full snapshot polling avoids the unsafe combination of persisted offset pagination plus a live descending feed and keeps market discovery semantics easy to reason about. Raw snapshot diffs belong downstream of archive storage, not inside the recurring checkpoint model.
+
+### Restrict Gamma offset pagination to explicit backfill mode
+Rationale:
+Offset-based pagination is still useful for manual archive sweeps, but it should not be the default or an accidental side effect of normal job submission. Making backfill mode explicit in the CLI and API removes ambiguity and prevents recurring schedules from drifting into legacy behavior.
+
+### Scope checkpoints by workflow owner
+Rationale:
+One cursor row per `(source, dataset)` was not sufficient once multiple schedules or manual backfills could coexist. Checkpoints now belong to an explicit owner key, with recurring schedules deriving that owner from `schedule_id`, so independent workflows no longer overwrite each other's progress.
+
+### Use compare-and-set cursor advancement
+Rationale:
+If two jobs try to advance the same owner-scoped checkpoint from different starting states, the later stale write must fail instead of silently overwriting newer progress. Compare-and-set keeps checkpoint advancement safe without requiring a heavyweight distributed lock manager in this slice.
+
+### Claim due schedules atomically and submit deterministic idempotency keys
+Rationale:
+Selecting due schedules with a plain read then updating them later made duplicate enqueueing too easy. Atomic claiming closes that race, and deterministic idempotency keys derived from schedule identity plus due time ensure duplicate submission attempts collapse safely if they still happen.
+
+### Keep market discovery separate from token detail snapshots
+Rationale:
+Gamma market discovery, order-book snapshots, and midpoint snapshots are operationally different datasets. Discovery should own discovery cadence and archive capture only, while `book` and `midpoint` remain separate token-scoped detail jobs rather than sharing the discovery checkpoint model.
+
+### Remove the in-tree Polymarket ELT package until canonical transforms are ready to be owned properly
+Rationale:
+The repository now has a production-oriented ingestion runtime, but the old ELT code was an isolated normalization slice that no longer matched the active ingestion direction and was not part of the current operational path. Removing it reduces dead surface area and makes it explicit that raw-to-canonical work is still planned follow-on work rather than a supported in-repo subsystem.

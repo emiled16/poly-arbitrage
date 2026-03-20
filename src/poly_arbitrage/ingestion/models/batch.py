@@ -15,5 +15,7 @@ class IngestionBatch:
     job_id: str
     records: list[RawIngestionRecord]
     next_cursor: str | None = None
+    has_more: bool = False
+    source_watermark: str | None = None
     batch_id: str = field(default_factory=lambda: uuid4().hex)
     emitted_at: datetime = field(default_factory=utc_now)

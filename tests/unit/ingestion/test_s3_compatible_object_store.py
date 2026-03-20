@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from poly_arbitrage.ingestion.object_stores.s3_compatible_object_store import (
-    S3CompatibleObjectStore,
-)
+from poly_arbitrage.ingestion.object_stores.s3 import S3CompatibleObjectStore
 
 
 class FakeBody:
