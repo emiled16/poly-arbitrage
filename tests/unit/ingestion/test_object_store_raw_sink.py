@@ -4,15 +4,13 @@ import json
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from poly_arbitrage.ingestion.factories.raw_record_factory import build_raw_record
 from poly_arbitrage.ingestion.models.batch import IngestionBatch
-from poly_arbitrage.ingestion.object_stores.local_filesystem_object_store import (
-    LocalFilesystemObjectStore,
-)
-from poly_arbitrage.ingestion.raw_sinks.object_store_raw_sink import ObjectStoreRawSink
+from poly_arbitrage.ingestion.models.raw_record import build_raw_record
+from poly_arbitrage.ingestion.object_stores.local import LocalFilesystemObjectStore
+from poly_arbitrage.ingestion.raw_storage.raw_batch_storage import RawBatchStorage
 
 
-def test_object_store_raw_sink_writes_jsonl_batch_and_metadata(tmp_path: Path) -> None:
+def test_raw_batch_storage_writes_jsonl_batch_and_metadata(tmp_path: Path) -> None:
     batch = IngestionBatch(
         source="polymarket_gamma",
         dataset="markets",
@@ -28,14 +26,14 @@ def test_object_store_raw_sink_writes_jsonl_batch_and_metadata(tmp_path: Path) -
             )
         ],
     )
-    sink = ObjectStoreRawSink(
+    raw_storage = RawBatchStorage(
         object_store=LocalFilesystemObjectStore(root_directory=tmp_path),
         container_name="raw",
     )
 
-    uri = sink.write_batch(batch)
+    artifact = raw_storage.store_batch(batch)
 
-    object_path = Path(unquote(urlparse(uri).path))
+    object_path = Path(unquote(urlparse(artifact.object_uri).path))
     assert object_path.exists()
     contents = object_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(contents) == 1
@@ -49,3 +47,4 @@ def test_object_store_raw_sink_writes_jsonl_batch_and_metadata(tmp_path: Path) -
     assert metadata["content_type"] == "application/x-ndjson"
     assert metadata["metadata"]["job_id"] == "job-1"
     assert metadata["metadata"]["source"] == "polymarket_gamma"
+    assert artifact.record_count == 1

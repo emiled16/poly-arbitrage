@@ -1,6 +1,44 @@
+name: poly-arbitrage
+
+x-ingestion-environment: &ingestion-environment
+  POLY_ARB_POSTGRES_DSN: postgresql+psycopg://postgres:postgres@postgres:5432/poly_arbitrage
+  POLY_ARB_RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+  POLY_ARB_RAW_STORE_BACKEND: local
+  POLY_ARB_RAW_STORE_ROOT: /app/artifacts/datasets
+
 services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POLY_ARB_POSTGRES_DB:-poly_arbitrage}
+      POSTGRES_USER: ${POLY_ARB_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POLY_ARB_POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./artifacts/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POLY_ARB_POSTGRES_USER:-postgres} -d ${POLY_ARB_POSTGRES_DB:-poly_arbitrage}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ./artifacts/rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
   minio:
     image: minio/minio:RELEASE.2025-02-28T09-55-16Z
+    profiles: ["minio"]
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${POLY_ARB_MINIO_ACCESS_KEY:-minioadmin}
@@ -10,3 +48,79 @@ services:
       - "9001:9001"
     volumes:
       - ./artifacts/minio:/data
+
+  ingestion-init:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment: *ingestion-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["poetry", "run", "python", "scripts/init_ingestion_store.py"]
+    volumes:
+      - ./artifacts/datasets:/app/artifacts/datasets
+    restart: "no"
+
+  ingestion-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment: *ingestion-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ingestion-init:
+        condition: service_completed_successfully
+    command: ["poetry", "run", "python", "scripts/run_ingestion_api.py"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts/datasets:/app/artifacts/datasets
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ingestion-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      <<: *ingestion-environment
+      POLY_ARB_INGESTION_WORKER_ID: ingestion-worker-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ingestion-init:
+        condition: service_completed_successfully
+    command: ["poetry", "run", "python", "scripts/run_ingestion_worker.py"]
+    volumes:
+      - ./artifacts/datasets:/app/artifacts/datasets
+    restart: unless-stopped
+
+  ingestion-scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      <<: *ingestion-environment
+      POLY_ARB_INGESTION_SCHEDULER_INTERVAL_SECONDS: ${POLY_ARB_INGESTION_SCHEDULER_INTERVAL_SECONDS:-30}
+      POLY_ARB_INGESTION_SCHEDULER_LIMIT: ${POLY_ARB_INGESTION_SCHEDULER_LIMIT:-100}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ingestion-init:
+        condition: service_completed_successfully
+    command: ["poetry", "run", "python", "scripts/run_ingestion_scheduler_service.py"]
+    volumes:
+      - ./artifacts/datasets:/app/artifacts/datasets
+    restart: unless-stopped

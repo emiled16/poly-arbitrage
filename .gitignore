@@ -11,3 +11,4 @@ artifacts/state/
 .codex/config.toml
 
 .env
+artifacts/

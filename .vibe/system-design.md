@@ -97,6 +97,43 @@
 - preserve enough raw context to support replay, reprocessing, and schema evolution
 - keep raw storage behind a provider-neutral object-store interface so local MinIO, AWS S3, and later GCS backends can share the same ingestion boundary
 
+## Ingestion Contracts
+
+### Dataset contracts
+- `polymarket_gamma/markets`: recurring full snapshot polling with no persisted recurring cursor
+- `polymarket_gamma/markets` explicit backfill: manual offset-based pagination only when `mode=backfill` is requested
+- `polymarket_clob/book`: token-scoped detail snapshot keyed by `token_id`
+- `polymarket_clob/midpoint`: token-scoped detail snapshot keyed by `token_id`
+
+### Checkpoint ownership and advancement
+- checkpoints are owned by an explicit workflow key, not just `(source, dataset)`
+- recurring schedules derive checkpoint ownership from `schedule_id`
+- manual jobs may provide their own `checkpoint_key` when resumable state is actually desired
+- a cursor may advance only if the stored cursor still matches the job's starting cursor
+- stale cursor writes fail instead of silently overwriting a newer checkpoint
+
+### Scheduler and retry invariants
+- due schedules are claimed and advanced in one atomic repository step
+- scheduled jobs use deterministic idempotency keys derived from schedule identity and due time
+- recurring Gamma schedules must use `mode=snapshot`
+- recurring Gamma schedules must not persist or resume offset pagination
+- retries do not mutate checkpoint state unless the retried job successfully finishes and wins the compare-and-set cursor update
+
+### Pagination and backfill rules
+- offset pagination is allowed only for explicit Gamma backfill workflows
+- paginated backfills do not define production freshness semantics
+- recurring production polling must always start from a clean Gamma snapshot query
+
+### Fan-out boundaries
+- Gamma market discovery owns only market-list snapshot capture and archive storage
+- downstream `book` and `midpoint` fetches are separate detail jobs keyed by `token_id`
+- discovery-driven fan-out should remain downstream orchestration and must not reuse the discovery checkpoint as a detail-feed cursor
+
+### Observability expectations
+- log per job: checkpoint before, checkpoint after, checkpoint owner, query mode, has-more flag, and retry count
+- track per dataset: last successful run time, time since last success, retry backlog, and dead-letter frequency
+- treat duplicate schedule enqueue attempts as an operational event worth surfacing through logs and idempotency counters
+
 ## Recommended External Source Shortlist
 
 ### Tier 0: must-have for first implementation
@@ -710,11 +747,12 @@
 - Python worker processes for ingestion, retrieval, orchestration, forecasting, and replay
 - Next.js frontend served separately from the API service
 
-## ELT Layering Direction
+## Refined Transform Direction
 - raw landing layer for immutable or append-only payload capture
 - refined canonical layer for normalized market, snapshot, and evidence tables
 - feature-ready layer for training, inference, and replay joins
 - transformations should be rerunnable from raw data when schema assumptions change
+- this layering is currently a design target, not a maintained `src/poly_arbitrage/elt` package
 
 ## Observability Model
 - structured logs keyed by `market_id`, `research_run_id`, and `replay_run_id`

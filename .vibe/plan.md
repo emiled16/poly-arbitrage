@@ -16,10 +16,16 @@
 - v0.1.12 | 2026-03-19 | Split Polymarket HTTP concerns into dedicated protocol, error, and urllib transport modules
 - v0.1.13 | 2026-03-19 | Introduced a provider-neutral raw archive boundary with local and MinIO-backed object-store adapters plus durable local ingestion-state logs
 - v0.1.14 | 2026-03-19 | Removed the thin dispatcher layer so request-to-job enqueueing is direct and worker execution owns connector resolution
+- v0.1.15 | 2026-03-19 | Rebuilt ingestion around Postgres-backed job state, RabbitMQ delivery, a shared source-handler registry, and worker/api/scheduler runtime entrypoints
+- v0.1.16 | 2026-03-19 | Simplified ingestion persistence around SQLAlchemy tables, record stores, a CRUD routing registry, and domain repositories
+- v0.1.17 | 2026-03-19 | Added Alembic migrations, DB-backed idempotency, retry/dead-letter job handling, and ingestion admin endpoints
+- v0.1.18 | 2026-03-19 | Replaced Gamma offset checkpointing with source-owned watermark cursors and changed schedule cursor semantics to bootstrap-only
+- v0.1.19 | 2026-03-19 | Replaced recurring Gamma watermark mode with full snapshot polling, moved checkpoints to owner-scoped keys, and made schedule claiming atomic with deterministic run idempotency
+- v0.1.20 | 2026-03-19 | Removed the in-tree Polymarket ELT package and folded canonical/refined transform work back into the planned raw-exploration phase
 
 ## Current Status
 - Phase: Development session
-- Overall status: raw Polymarket archive persistence is implemented behind a provider-neutral object-store boundary, and ingestion now uses a simpler direct enqueue path with worker-owned connector resolution
+- Overall status: ingestion now uses PostgreSQL as the source of truth for jobs, schedules, and owner-scoped checkpoints; RabbitMQ delivers job IDs to workers and captures broker-level dead letters; retries are scheduled in the database and re-enqueued by the scheduler; raw batches land in provider-neutral object storage; persistence is split into SQLAlchemy tables, record stores, a CRUD routing registry, and domain repositories; recurring `polymarket_gamma/markets` uses full snapshot polling with no persisted recurring cursor; explicit Gamma backfills use offset mode only when requested; schedule runs are claimed atomically with deterministic idempotency keys; and the previously in-tree Polymarket ELT package has been removed so raw-to-canonical transforms remain planned rather than partially maintained code
 - Blocking items: `poetry`-managed environment bootstrap is still pending
 
 ## Planning Assumptions
@@ -77,13 +83,16 @@ Tasks:
 - [done] Integrate Polymarket market and price ingestion
 - [done] Persist raw Polymarket payloads and source snapshots before heavy normalization
 - [done] Introduce a provider-neutral raw object-store abstraction with local and MinIO-backed adapters
-- [done] Persist ingestion manifests and failure events durably for local development
-- [done] Simplify ingestion submission by removing the thin dispatcher validation layer
+- [done] Replace local-only queue/state flow with Postgres-backed ingestion job state and RabbitMQ delivery
+- [done] Expose operational ingestion entrypoints through worker, scheduler, and API runtime surfaces
+- [done] Lock recurring Gamma ingestion to full snapshot polling and isolate backfill-only offset mode
+- [done] Scope checkpoint advancement by workflow owner instead of one global `(source, dataset)` cursor
+- [done] Make due-schedule claiming atomic and schedule job submission deterministic
 - [todo] Build exploratory profiling on raw payload shapes, nullability, and update frequency
 - [todo] Refine canonical market records and time-series snapshots from the raw dataset
 - [in-progress] Archive raw payloads for replay and reprocessing
-- [todo] Define ingestion idempotency and retry rules
-- [todo] Define freshness SLAs and lag monitoring
+- [done] Define ingestion idempotency and retry rules
+- [in-progress] Define freshness SLAs and lag monitoring
 
 ### F3a. Raw data exploration and ELT refinement
 Status: in progress

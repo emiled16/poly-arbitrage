@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from poly_arbitrage.ingestion.models.job import IngestionJob
-from poly_arbitrage.ingestion.sources.polymarket.connectors.clob_book_connector import (
-    PolymarketClobBookConnector,
-)
-from poly_arbitrage.ingestion.sources.polymarket.connectors.clob_midpoint_connector import (
-    PolymarketClobMidpointConnector,
+from poly_arbitrage.ingestion.sources.polymarket.handlers import (
+    PolymarketClobBookHandler,
+    PolymarketClobMidpointHandler,
 )
 
 
@@ -21,7 +17,7 @@ class FakeHttpClient:
 
 
 def test_clob_book_connector_emits_raw_book_payload() -> None:
-    connector = PolymarketClobBookConnector(
+    connector = PolymarketClobBookHandler(
         http_client=FakeHttpClient(
             {
                 "https://clob.polymarket.com/book?token_id=yes-token": {
@@ -42,7 +38,6 @@ def test_clob_book_connector_emits_raw_book_payload() -> None:
         source="polymarket_clob",
         dataset="book",
         params={"token_id": "yes-token"},
-        enqueued_at=datetime(2026, 3, 18, 12, 0, tzinfo=UTC),
     )
 
     batch = connector.fetch(job)
@@ -57,7 +52,7 @@ def test_clob_book_connector_emits_raw_book_payload() -> None:
 
 
 def test_clob_midpoint_connector_emits_raw_midpoint_payload() -> None:
-    connector = PolymarketClobMidpointConnector(
+    connector = PolymarketClobMidpointHandler(
         http_client=FakeHttpClient(
             {
                 "https://clob.polymarket.com/midpoint?token_id=yes-token": {
@@ -71,7 +66,6 @@ def test_clob_midpoint_connector_emits_raw_midpoint_payload() -> None:
         source="polymarket_clob",
         dataset="midpoint",
         params={"token_id": "yes-token"},
-        enqueued_at=datetime(2026, 3, 18, 12, 0, tzinfo=UTC),
     )
 
     batch = connector.fetch(job)

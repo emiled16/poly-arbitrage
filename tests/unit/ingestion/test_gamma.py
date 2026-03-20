@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from poly_arbitrage.ingestion.models.job import IngestionJob
-from poly_arbitrage.ingestion.sources.polymarket.connectors.gamma_markets_connector import (
-    PolymarketGammaMarketsConnector,
+from poly_arbitrage.ingestion.sources.polymarket.handlers import (
+    GammaMarketsCheckpoint,
+    PolymarketGammaMarketsHandler,
+    format_gamma_markets_checkpoint,
+    parse_iso_datetime,
 )
 
 
@@ -18,8 +19,8 @@ class FakeHttpClient:
         return self.responses[url]
 
 
-def test_gamma_connector_emits_raw_markets_batch() -> None:
-    connector = PolymarketGammaMarketsConnector(
+def test_gamma_connector_uses_snapshot_mode_by_default() -> None:
+    connector = PolymarketGammaMarketsHandler(
         http_client=FakeHttpClient(
             {
                 "https://gamma-api.polymarket.com/markets": [
@@ -27,23 +28,7 @@ def test_gamma_connector_emits_raw_markets_batch() -> None:
                         "id": "gamma-market-1",
                         "conditionId": "condition-1",
                         "question": "Will candidate X win?",
-                        "slug": "candidate-x-win",
-                        "description": "Binary outcome market",
-                        "resolutionSource": "Official election result",
-                        "category": "Politics",
-                        "marketType": "binary",
-                        "startDateIso": "2026-03-01T00:00:00Z",
-                        "endDateIso": "2026-11-04T00:00:00Z",
-                        "active": True,
-                        "closed": False,
-                        "archived": False,
-                        "acceptingOrders": True,
-                        "liquidityNum": 1212.5,
-                        "volumeNum": 9123.25,
-                        "volume24hr": 120.5,
-                        "outcomes": "[\"Yes\", \"No\"]",
-                        "outcomePrices": "[\"0.61\", \"0.39\"]",
-                        "clobTokenIds": "[\"yes-token\", \"no-token\"]",
+                        "updatedAt": "2026-03-20T00:00:00Z",
                     }
                 ]
             }
@@ -53,21 +38,53 @@ def test_gamma_connector_emits_raw_markets_batch() -> None:
         job_id="job-1",
         source="polymarket_gamma",
         dataset="markets",
-        params={"limit": 1, "offset": 0, "active": True, "closed": False},
-        enqueued_at=datetime(2026, 3, 18, 12, 0, tzinfo=UTC),
+        params={"limit": 100, "active": True, "closed": False, "mode": "snapshot"},
     )
 
     batch = connector.fetch(job)
 
-    assert batch.source == "polymarket_gamma"
-    assert batch.dataset == "markets"
-    assert batch.job_id == "job-1"
-    assert batch.next_cursor == "offset=1"
-    assert len(batch.records) == 1
-    record = batch.records[0]
-    assert record.endpoint == "https://gamma-api.polymarket.com/markets"
-    assert record.request_params["limit"] == 1
-    assert isinstance(record.payload, list)
-    assert record.payload[0]["conditionId"] == "condition-1"
-    assert record.metadata["response_shape"] == "list"
-    assert record.metadata["item_count"] == 1
+    assert connector.http_client.calls[0][1] == {
+        "limit": 100,
+        "active": True,
+        "closed": False,
+    }
+    assert batch.next_cursor is None
+    assert batch.has_more is False
+    assert batch.source_watermark == format_gamma_markets_checkpoint(
+        GammaMarketsCheckpoint(
+            updated_at=parse_iso_datetime("2026-03-20T00:00:00Z"),
+            market_id="gamma-market-1",
+        )
+    )
+    assert batch.records[0].metadata["query_mode"] == "snapshot"
+
+
+def test_gamma_connector_uses_explicit_backfill_offset_mode() -> None:
+    connector = PolymarketGammaMarketsHandler(
+        http_client=FakeHttpClient(
+            {
+                "https://gamma-api.polymarket.com/markets": [
+                    {"id": "gamma-market-2", "updatedAt": "2026-03-20T00:00:00Z"},
+                ]
+            }
+        )
+    )
+    job = IngestionJob(
+        job_id="job-2",
+        source="polymarket_gamma",
+        dataset="markets",
+        params={"limit": 1, "offset": 0, "active": True, "closed": False, "mode": "backfill"},
+        cursor="offset=100",
+    )
+
+    batch = connector.fetch(job)
+
+    assert connector.http_client.calls[0][1] == {
+        "limit": 1,
+        "active": True,
+        "closed": False,
+        "offset": 100,
+    }
+    assert batch.next_cursor == "offset=101"
+    assert batch.has_more is True
+    assert batch.records[0].metadata["query_mode"] == "backfill"

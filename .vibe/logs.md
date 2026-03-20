@@ -56,3 +56,50 @@
 - Added a regression test proving that an enqueued job with no registered worker connector produces a durable failure record instead of being dropped silently
 - Removed the fake Unix-epoch fallback from CLOB snapshot normalization so missing or invalid book timestamps now fail closed instead of fabricating replay-corrupt data
 - Verified the storage-abstraction slice with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion scripts/ingest_polymarket.py tests/unit/ingestion`, and `PYTHONPATH=src python3 -m compileall src tests scripts`
+- Replaced the local in-memory ingestion path with a production-oriented runtime centered on a Postgres-backed ingestion state store, RabbitMQ delivery, and object-store-backed raw batch archives
+- Collapsed the fragmented ingestion protocols into a single `contracts.py` boundary and reorganized runtime concerns around `service.py`, `scheduler.py`, `runtime.py`, and `workers/consumer.py`
+- Simplified Polymarket ingestion into one handler module plus a lightweight JSON client while preserving the source-specific raw fetch behavior behind a shared handler interface
+- Reworked the scripts into operational entrypoints for store initialization, job submission, worker execution, scheduler execution, and FastAPI serving
+- Updated Docker Compose and Poetry dependencies to support PostgreSQL, RabbitMQ, FastAPI, SQLAlchemy, psycopg, pika, and uvicorn in the ingestion slice
+- Verified the ingestion refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit/ingestion -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion tests/unit/ingestion scripts`, and `PYTHONPATH=src python3 -m compileall src tests scripts`
+- Separated SQLAlchemy table definitions into `ingestion/database/tables.py` and added record-store classes for jobs, cursors, and schedules under `ingestion/database/records/`
+- Added an `IngestionDatabase` wrapper that owns schema creation and exposes SQLAlchemy-backed record stores while `state/postgres.py` now translates between domain models and database records
+- Added a direct state-store/database test that skips cleanly until the `sqlalchemy` dependency is installed in the local environment
+- Verified the database-layer refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion tests/unit/ingestion scripts`
+- Removed the Postgres state-store adapter and rewired ingestion to depend directly on job, cursor, and schedule repositories
+- Added a class-routed `RepositoryRegistry` so CRUD operations on job, cursor, and schedule records resolve to the correct SQLAlchemy-backed record store
+- Renamed the repository integration test to `tests/unit/ingestion/test_repositories.py` and removed the obsolete `ingestion/state/` package entrypoint
+- Verified the repository simplification with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion tests/unit/ingestion scripts`
+- Fixed SQLAlchemy repository datetime round-tripping so SQLite-loaded timestamps are normalized back to UTC-aware datetimes before re-entering domain models
+- Verified the datetime fix with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q` and `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion tests/unit/ingestion scripts`
+- Added an Alembic baseline under `alembic/` and changed `scripts/init_ingestion_store.py` to run migrations explicitly instead of relying on runtime schema auto-creation
+- Added DB-backed idempotency enforcement for `(source, dataset, idempotency_key)` plus indexed job queries, queued-at tracking, and retry-ready selection in the SQLAlchemy record layer
+- Implemented retry scheduling and dead-letter transitions in the ingestion service, scheduler support for due retries, and RabbitMQ dead-letter queue declarations for broker-level message failures
+- Added ingestion admin endpoints for filtered job listing, schedule listing, combined due-work execution, and job redrive, with new unit coverage for idempotency, retry scheduling, dead-lettering, and API behavior
+- Fixed duplicate idempotent submissions so an existing job is returned without re-publishing the same job id back onto RabbitMQ
+- Verified the production-hardening slice with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion tests/unit/ingestion scripts`, and `PYTHONPATH=src python3 -m compileall src tests scripts alembic`
+- Reworked Polymarket Gamma cursor handling so the handler owns a watermark cursor based on `updatedAt` and `id`, using `offset` only as transient sweep state while preserving a legacy offset fallback for manual backfills
+- Changed schedule cursor semantics to `bootstrap_cursor`, added a migration to rename the column, and updated scheduling to prefer persisted checkpoints over bootstrap seeds
+- Added unit coverage for Gamma watermark request application, watermark advancement, bootstrap-vs-persisted schedule behavior, and the renamed schedule repository field
+- Verified the watermark-cursor refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion tests/unit/ingestion alembic scripts`, and `PYTHONPATH=src python3 -m compileall src tests scripts alembic`
+- Added a future-design note to `.vibe/key-decisions.md` clarifying that one persisted cursor per `(source, dataset)` is not sufficient coordination for multiple concurrent workers and will require serialized advancement or explicit partitioning
+
+## 2026-03-19
+- Added a Docker image under `docker/Dockerfile` so the ingestion runtime can run as a composed local stack instead of only as host processes
+- Expanded `docker-compose.yml` with `ingestion-init`, `ingestion-api`, `ingestion-worker`, and long-running `ingestion-scheduler` services plus health checks and shared raw-storage wiring
+- Added a small polling scheduler service entrypoint and unit coverage so recurring schedule and retry publication can run continuously in Docker Compose without introducing Airflow, Dagster, or cron
+- Updated `README.md` with the composed local run flow and the new scheduler polling configuration
+- Expanded `.env.example` to cover the runtime and Compose environment surface: PostgreSQL, RabbitMQ, retry policy, worker identity, scheduler polling, raw storage, optional MinIO, and logging defaults
+- Synced `.env` to the expanded example so local shell-based runs and Docker Compose share the same default environment surface
+- Reviewed the ingestion subsystem with focus on scheduler cadence, cursor semantics, and Polymarket Gamma paging behavior, then recorded the findings in `review.md`
+- Converted the ingestion review into a developer-facing refactor checklist in `next-steps.md`, covering contract decisions, checkpoint ownership, scheduler correctness, concurrency safety, tests, and cleanup
+- Chose full snapshot polling as the recurring production contract for `polymarket_gamma/markets` and restricted offset pagination to explicit backfill mode
+- Added submission normalization and validation so the CLI, API, and scheduler agree on snapshot-versus-backfill rules and reject invalid Gamma parameter combinations early
+- Replaced global `(source, dataset)` checkpoint rows with owner-scoped checkpoint keys stored on jobs and persisted in the cursor repository
+- Added compare-and-set cursor advancement and fail-fast stale checkpoint handling so concurrent or duplicated jobs cannot silently overwrite newer cursor state
+- Reworked schedule execution to claim due schedules atomically and submit deterministic idempotency keys derived from schedule identity and due time
+- Simplified the Polymarket Gamma handler to one production snapshot path plus one explicit backfill path and removed the hybrid watermark-plus-offset logic
+- Expanded ingestion unit coverage for checkpoint isolation, stale cursor writes, atomic schedule claiming, schedule-run idempotency, API validation, and CLI submission defaults
+- Verified the refactor with `PYTHONPATH=src .venv/bin/python -m pytest tests/unit/ingestion -q`, `.venv/bin/python -m ruff check src/poly_arbitrage/ingestion tests/unit/ingestion scripts alembic`, and `PYTHONPATH=src python3 -m compileall src tests scripts alembic`
+- Removed `src/poly_arbitrage/elt/` and its dedicated `tests/unit/elt/` coverage because that package was no longer part of the active ingestion/runtime path
+- Updated the planning records to reflect that raw-to-canonical transforms are still planned work under raw exploration and canonical refinement, not a currently maintained in-tree ELT subsystem
